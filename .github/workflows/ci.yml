@@ -9,16 +9,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: 9.0.x
-          cache: true
+
       - name: Restore
         run: dotnet restore Jobba.sln
+
       - name: Build
         run: dotnet build Jobba.sln --configuration Release --no-restore
-      - name: Test (if tests exist)
+
+      - name: Test
         if: ${{ hashFiles('tests/**/*.csproj') != '' }}
         run: |
           for proj in $(ls -1 tests/**/*.csproj); do
