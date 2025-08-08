@@ -1,0 +1,29 @@
+# Auto-normalize line endings for cross-platform devs
+* text=auto eol=lf
+
+# Treat common file types as text for proper diffs
+*.cs     text diff=csharp
+*.csproj text
+*.sln    text
+*.json   text
+*.yml    text
+*.yaml   text
+*.md     text
+*.xml    text
+*.html   text
+*.css    text
+*.js     text
+
+# Force binary for these file types (no diffs)
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.exe    binary
+*.dll    binary
+*.pdb    binary
+*.zip    binary
+
+# Ensure shell scripts keep LF endings (important if ever run in Linux CI)
+*.sh text eol=lf
