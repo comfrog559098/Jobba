@@ -49,7 +49,7 @@ cd jobba/src/Jobba
 dotnet run
 ```
 
-The server will print the listening URLs (for example `http://localhost:5241`).  
+The server will print the listening URLs (for example `http://localhost:5000`).  
 Open Swagger UI at:
 
 ```
@@ -97,7 +97,7 @@ $body = @{
   location = "Remote"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:5241/applications" `
+Invoke-RestMethod -Uri "http://localhost:5000/applications" `
   -Method POST `
   -Body $body `
   -ContentType 'application/json'
@@ -106,7 +106,7 @@ Invoke-RestMethod -Uri "http://localhost:5241/applications" `
 **List**
 
 ```
-Invoke-RestMethod -Uri "http://localhost:5241/applications"
+Invoke-RestMethod -Uri "http://localhost:5000/applications"
 ```
 
 ---
