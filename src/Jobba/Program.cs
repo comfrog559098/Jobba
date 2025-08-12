@@ -18,10 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
 var app = builder.Build();
-
-// Swagger only in dev
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -34,11 +31,16 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 // Applications endpoints
 var group = app.MapGroup("/applications");
 
-// GET all (with simple sorting and optional status filter)
-group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sortBy) =>
+// GET all
+group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sortBy, string? company) =>
 {
     var q = db.Applications.AsQueryable();
-    if (status.HasValue) q = q.Where(a => a.Status == status);
+    if (status.HasValue) 
+        q = q.Where(a => a.Status == status);
+
+    if (!string.IsNullOrEmpty(company))
+        q = q.Where(a => a.Company.Contains(company, StringComparison.OrdinalIgnoreCase));
+
     q = sortBy switch
     {
         "company" => q.OrderBy(a => a.Company),
@@ -46,6 +48,7 @@ group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sor
         "date" => q.OrderByDescending(a => a.AppliedAt),
         _ => q.OrderByDescending(a => a.Id)
     };
+
     return await q.ToListAsync();
 });
 
@@ -56,9 +59,18 @@ group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
 // POST create
 group.MapPost("/", async (JobApplication input, AppDbContext db) =>
 {
-    input.Id = 0; // safety
+    if (input.Company.Length < 1)
+        return Results.BadRequest("Company is a required field.");
+
+    if (input.Role.Length < 1)
+        return Results.BadRequest("Role is a required field.");
+
+    input.Id = 0;
     db.Applications.Add(input);
     await db.SaveChangesAsync();
+
+    Log.Information($"Created application {input.Id} for {input.Company}");
+
     return Results.Created($"/applications/{input.Id}", input);
 });
 
