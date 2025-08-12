@@ -1,41 +1,115 @@
+using Jobba.Data;
+using Jobba.Models;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Serilog
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
+builder.Host.UseSerilog();
+
+// EF Core + SQLite
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlite(builder.Configuration.GetConnectionString("Jobba")));
+
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Swagger only in dev
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// Basic health
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// Applications endpoints
+var group = app.MapGroup("/applications");
 
-app.MapGet("/weatherforecast", () =>
+// GET all (with simple sorting and optional status filter)
+group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sortBy) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var q = db.Applications.AsQueryable();
+    if (status.HasValue) q = q.Where(a => a.Status == status);
+    q = sortBy switch
+    {
+        "company" => q.OrderBy(a => a.Company),
+        "role" => q.OrderBy(a => a.Role),
+        "date" => q.OrderByDescending(a => a.AppliedAt),
+        _ => q.OrderByDescending(a => a.Id)
+    };
+    return await q.ToListAsync();
+});
+
+// GET one
+group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
+    await db.Applications.FindAsync(id) is { } a ? Results.Ok(a) : Results.NotFound());
+
+// POST create
+group.MapPost("/", async (JobApplication input, AppDbContext db) =>
+{
+    input.Id = 0; // safety
+    db.Applications.Add(input);
+    await db.SaveChangesAsync();
+    return Results.Created($"/applications/{input.Id}", input);
+});
+
+// PUT update
+group.MapPut("/{id:int}", async (int id, JobApplication update, AppDbContext db) =>
+{
+    var existing = await db.Applications.FindAsync(id);
+    if (existing is null) return Results.NotFound();
+
+    existing.Company = update.Company;
+    existing.Role = update.Role;
+    existing.Source = update.Source;
+    existing.Status = update.Status;
+    existing.Location = update.Location;
+    existing.SalaryRange = update.SalaryRange;
+    existing.AppliedAt = update.AppliedAt;
+    existing.NextAction = update.NextAction;
+    existing.Notes = update.Notes;
+
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// DELETE
+group.MapDelete("/{id:int}", async (int id, AppDbContext db) =>
+{
+    var existing = await db.Applications.FindAsync(id);
+    if (existing is null) return Results.NotFound();
+    db.Applications.Remove(existing);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// Dev seed
+await EnsureSeedAsync(app);
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+static async Task EnsureSeedAsync(WebApplication app)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+
+    if (!await db.Applications.AnyAsync())
+    {
+        db.Applications.AddRange(
+            new JobApplication { Company = "PartnerStack", Role = "T1 Support Agent", Status = ApplicationStatus.Applied, Source = "Posting", Location = "Remote", NextAction = "Follow-up Tue" },
+            new JobApplication { Company = "Foundant", Role = "Junior Dev", Status = ApplicationStatus.Screening, Source = "Referral", Location = "Remote", NextAction = "Prep for call" },
+            new JobApplication { Company = "Local MSP", Role = "IT Support", Status = ApplicationStatus.Draft, Source = "Indeed", Location = "Medicine Hat", Notes = "Tailor resume" }
+        );
+        await db.SaveChangesAsync();
+    }
 }
