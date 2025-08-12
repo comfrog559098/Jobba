@@ -53,7 +53,7 @@ The server will print the listening URLs (for example `http://localhost:5000`).
 Open Swagger UI at:
 
 ```
-http://localhost:<port>/swagger
+http://localhost:5000/swagger
 ```
 
 ---
