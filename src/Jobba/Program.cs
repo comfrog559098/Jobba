@@ -32,14 +32,15 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 var group = app.MapGroup("/applications");
 
 // GET all
-group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sortBy, string? company) =>
+group.MapGet("/", async ( AppDbContext db, ApplicationStatus? status, string? sortBy, string? company, int page = 1, int pageSize = 10) =>
 {
     var q = db.Applications.AsQueryable();
-    if (status.HasValue) 
+
+    if (status.HasValue)
         q = q.Where(a => a.Status == status);
 
-    if (!string.IsNullOrEmpty(company))
-        q = q.Where(a => a.Company.Contains(company, StringComparison.OrdinalIgnoreCase));
+    if (!string.IsNullOrWhiteSpace(company))
+        q = q.Where(a => a.Company.Contains(company));
 
     q = sortBy switch
     {
@@ -49,8 +50,12 @@ group.MapGet("/", async (AppDbContext db, ApplicationStatus? status, string? sor
         _ => q.OrderByDescending(a => a.Id)
     };
 
-    return await q.ToListAsync();
+    var total = await q.CountAsync();
+    var results = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+    return Results.Ok(new { total, page, pageSize, results });
 });
+
 
 // GET one
 group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
@@ -103,6 +108,38 @@ group.MapDelete("/{id:int}", async (int id, AppDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 });
+
+
+// ACTIVITIES
+var activityGroup = app.MapGroup("/applications/{applicationId:int}/activities");
+
+// GET activities for an application
+activityGroup.MapGet("/", async (int applicationId, AppDbContext db) =>
+{
+    var appEntity = await db.Applications.FindAsync(applicationId);
+    if (appEntity is null) return Results.NotFound();
+
+    var activities = await db.Activities
+        .Where(a => a.JobApplicationId == applicationId)
+        .OrderByDescending(a => a.Timestamp)
+        .ToListAsync();
+
+    return Results.Ok(activities);
+});
+
+// POST activity
+activityGroup.MapPost("/", async (int applicationId, Activity input, AppDbContext db) =>
+{
+    var appEntity = await db.Applications.FindAsync(applicationId);
+    if (appEntity is null) return Results.NotFound();
+
+    input.JobApplicationId = applicationId;
+    db.Activities.Add(input);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/applications/{applicationId}/activities/{input.Id}", input);
+});
+
 
 // Dev seed
 await EnsureSeedAsync(app);
