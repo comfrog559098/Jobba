@@ -7,6 +7,6 @@ public class Activity
     public JobApplication? JobApplication { get; set; }
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    public string Type { get; set; } = ""; // e.g., "Note", "StatusChange", "FollowUp"
+    public string Type { get; set; } = "";  // "Note", "StatusChange", "FollowUp"
     public string? Details { get; set; }
 }

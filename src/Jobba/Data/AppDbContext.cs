@@ -22,7 +22,8 @@ public class AppDbContext : DbContext
             e.Property(p => p.Status).HasConversion<int>();
             e.HasIndex(p => new { p.Company, p.Role });
 
-            e.HasMany<Activity>()
+            // one JobApplication has many Activities
+            e.HasMany(a => a.Activities)                 // ← if you added a navigation
              .WithOne(a => a.JobApplication!)
              .HasForeignKey(a => a.JobApplicationId)
              .OnDelete(DeleteBehavior.Cascade);

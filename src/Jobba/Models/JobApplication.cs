@@ -23,4 +23,5 @@ public class JobApplication
     public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
     public string? NextAction { get; set; }      // “Email recruiter Friday”
     public string? Notes { get; set; }
+    public List<Activity> Activities { get; set; } = [];
 }
